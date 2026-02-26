@@ -1,662 +1,375 @@
-# Stripe Node.js Library
+# Mongoose
 
-[![Version](https://img.shields.io/npm/v/stripe.svg)](https://www.npmjs.org/package/stripe)
-[![Build Status](https://github.com/stripe/stripe-node/actions/workflows/main.yml/badge.svg?branch=master)](https://github.com/stripe/stripe-node/actions?query=branch%3Amaster)
-[![Downloads](https://img.shields.io/npm/dm/stripe.svg)](https://www.npmjs.com/package/stripe)
-[![Try on RunKit](https://badge.runkitcdn.com/stripe.svg)](https://runkit.com/npm/stripe)
+Mongoose is a [MongoDB](https://www.mongodb.org/) object modeling tool designed to work in an asynchronous environment. Mongoose supports [Node.js](https://nodejs.org/en/) and [Deno](https://deno.land/) (alpha).
 
-The Stripe Node library provides convenient access to the Stripe API from
-applications written in server-side JavaScript.
+[![Build Status](https://github.com/Automattic/mongoose/workflows/Test/badge.svg)](https://github.com/Automattic/mongoose)
+[![NPM version](https://badge.fury.io/js/mongoose.svg)](http://badge.fury.io/js/mongoose)
+[![Deno version](https://deno.land/badge/mongoose/version)](https://deno.land/x/mongoose)
+[![Deno popularity](https://deno.land/badge/mongoose/popularity)](https://deno.land/x/mongoose)
 
-For collecting customer and payment information in the browser, use [Stripe.js][stripe-js].
+[![npm](https://nodei.co/npm/mongoose.png)](https://www.npmjs.com/package/mongoose)
 
 ## Documentation
 
-See the [`stripe-node` API docs](https://stripe.com/docs/api?lang=node) for Node.js.
+The official documentation website is [mongoosejs.com](http://mongoosejs.com/).
 
-## Requirements
-
-Node 12 or higher.
-
-## Installation
-
-Install the package with:
-
-```sh
-npm install stripe
-# or
-yarn add stripe
-```
-
-## Usage
-
-The package needs to be configured with your account's secret key, which is
-available in the [Stripe Dashboard][api-keys]. Require it with the key's
-value:
-
-<!-- prettier-ignore -->
-```js
-const stripe = require('stripe')('sk_test_...');
-
-stripe.customers.create({
-  email: 'customer@example.com',
-})
-  .then(customer => console.log(customer.id))
-  .catch(error => console.error(error));
-```
-
-Or using ES modules and `async`/`await`:
-
-```js
-import Stripe from 'stripe';
-const stripe = new Stripe('sk_test_...');
-
-const customer = await stripe.customers.create({
-  email: 'customer@example.com',
-});
-
-console.log(customer.id);
-```
-
-> [!WARNING]
-> If you're using `v17.x.x` or later and getting an error about a missing API key despite being sure it's available, it's likely you're importing the file that instantiates `Stripe` while the key isn't present (for instance, during a build step).
-> If that's the case, consider instantiating the client lazily:
->
-> ```ts
-> import Stripe from 'stripe';
->
-> let _stripe: Stripe | null = null;
-> const getStripe = (): Stripe => {
->   if (!_stripe) {
->     _stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
->       // ...
->     });
->   }
->   return _stripe;
-> };
->
-> const getCustomers = () => getStripe().customers.list();
-> ```
->
-> Alternatively, you can provide a placeholder for the real key (which will be enough to get the code through a build step):
->
-> ```ts
-> import Stripe from 'stripe';
->
-> export const stripe = new Stripe(
->   process.env.STRIPE_SECRET_KEY || 'api_key_placeholder',
->   {
->     // ...
->   }
-> );
-> ```
-
-### Usage with TypeScript
-
-As of 8.0.1, Stripe maintains types for the latest [API version][api-versions].
-
-Import Stripe as a default import (not `* as Stripe`, unlike the DefinitelyTyped version)
-and instantiate it as `new Stripe()` with the latest API version.
-
-```ts
-import Stripe from 'stripe';
-const stripe = new Stripe('sk_test_...');
-
-const createCustomer = async () => {
-  const params: Stripe.CustomerCreateParams = {
-    description: 'test customer',
-  };
-
-  const customer: Stripe.Customer = await stripe.customers.create(params);
-
-  console.log(customer.id);
-};
-createCustomer();
-```
-
-You can find a full TS server example in [stripe-samples](https://github.com/stripe-samples/accept-a-payment/tree/main/custom-payment-flow/server/node-typescript).
-
-#### Using old API versions with TypeScript
-
-Types can change between API versions (e.g., Stripe may have changed a field from a string to a hash),
-so our types only reflect the latest API version.
-
-We therefore encourage [upgrading your API version][api-version-upgrading]
-if you would like to take advantage of Stripe's TypeScript definitions.
-
-If you are on an older API version (e.g., `2019-10-17`) and not able to upgrade,
-you may pass another version and use a comment like `// @ts-ignore stripe-version-2019-10-17` to silence type errors here
-and anywhere the types differ between your API version and the latest.
-When you upgrade, you should remove these comments.
-
-We also recommend using `// @ts-ignore` if you have access to a beta feature and need to send parameters beyond the type definitions.
-
-#### Using `expand` with TypeScript
-
-[Expandable][expanding_objects] fields are typed as `string | Foo`,
-so you must cast them appropriately, e.g.,
-
-```ts
-const paymentIntent: Stripe.PaymentIntent = await stripe.paymentIntents.retrieve(
-  'pi_123456789',
-  {
-    expand: ['customer'],
-  }
-);
-const customerEmail: string = (paymentIntent.customer as Stripe.Customer).email;
-```
-
-#### TypeScript and the stripe-node versioning policy
-
-The TypeScript types in stripe-node always reflect the latest shape of the Stripe API. When the Stripe API changes in a [backwards-incompatible way](https://stripe.com/docs/upgrades#what-changes-does-stripe-consider-to-be-backwards-compatible), there is a new Stripe API version, and we release a new major version of stripe-node. Sometimes, though, the Stripe API changes in a way that weakens the guarantees provided by the TypeScript types, but that cannot result in any backwards incompatibility at runtime. For example, we might add a new enum value on a response, along with a new parameter to a request. Adding a new value to a response enum weakens the TypeScript type. However, if the new enum value is only returned when the new parameter is provided, this cannot break any existing usages and so would not be considered a breaking API change. In stripe-node, we do NOT consider such changes to be breaking under our current versioning policy. This means that you might see new type errors from TypeScript as you upgrade minor versions of stripe-node, that you can resolve by adding additional type guards.
-
-Please feel welcome to share your thoughts about the versioning policy in a Github issue. For now, we judge it to be better than the two alternatives: outdated, inaccurate types, or vastly more frequent major releases, which would distract from any future breaking changes with potentially more disruptive runtime implications.
-
-### Using Promises
-
-Every method returns a chainable promise which can be used instead of a regular
-callback:
-
-```js
-// Create a new customer and then create an invoice item then invoice it:
-stripe.customers
-  .create({
-    email: 'customer@example.com',
-  })
-  .then((customer) => {
-    // have access to the customer object
-    return stripe.invoiceItems
-      .create({
-        customer: customer.id, // set the customer id
-        amount: 2500, // 25
-        currency: 'usd',
-        description: 'One-time setup fee',
-      })
-      .then((invoiceItem) => {
-        return stripe.invoices.create({
-          collection_method: 'send_invoice',
-          customer: invoiceItem.customer,
-        });
-      })
-      .then((invoice) => {
-        // New invoice created on a new customer
-      })
-      .catch((err) => {
-        // Deal with an error
-      });
-  });
-```
-
-### Usage with Deno
-
-As of 11.16.0, stripe-node provides a `deno` export target. In your Deno project, import stripe-node using an npm specifier:
-
-Import using npm specifiers:
-
-```js
-import Stripe from 'npm:stripe';
-```
-
-Please see https://github.com/stripe-samples/stripe-node-deno-samples for more detailed examples and instructions on how to use stripe-node in Deno.
-
-## Configuration
-
-### Initialize with config object
-
-The package can be initialized with several options:
-
-```js
-import ProxyAgent from 'https-proxy-agent';
-
-const stripe = Stripe('sk_test_...', {
-  maxNetworkRetries: 1,
-  httpAgent: new ProxyAgent(process.env.http_proxy),
-  timeout: 1000,
-  host: 'api.example.com',
-  port: 123,
-  telemetry: true,
-});
-```
-
-| Option              | Default            | Description                                                                                                                                                                                                                                       |
-| ------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apiVersion`        | `null`             | Stripe API version to be used. If not set, stripe-node will use the latest version at the time of release.                                                                                                                                        |
-| `maxNetworkRetries` | 1                  | The amount of times a request should be [retried](#network-retries).                                                                                                                                                                              |
-| `httpAgent`         | `null`             | [Proxy](#configuring-a-proxy) agent to be used by the library.                                                                                                                                                                                    |
-| `timeout`           | 80000              | [Maximum time each request can take in ms.](#configuring-timeout)                                                                                                                                                                                 |
-| `host`              | `'api.stripe.com'` | Host that requests are made to.                                                                                                                                                                                                                   |
-| `port`              | 443                | Port that requests are made to.                                                                                                                                                                                                                   |
-| `protocol`          | `'https'`          | `'https'` or `'http'`. `http` is never appropriate for sending requests to Stripe servers, and we strongly discourage `http`, even in local testing scenarios, as this can result in your credentials being transmitted over an insecure channel. |
-| `telemetry`         | `true`             | Allow Stripe to send [telemetry](#telemetry).                                                                                                                                                                                                     |
-
-> **Note**
-> Both `maxNetworkRetries` and `timeout` can be overridden on a per-request basis.
-
-### Configuring Timeout
-
-Timeout can be set globally via the config object:
-
-```js
-const stripe = Stripe('sk_test_...', {
-  timeout: 20 * 1000, // 20 seconds
-});
-```
-
-And overridden on a per-request basis:
-
-```js
-stripe.customers.create(
-  {
-    email: 'customer@example.com',
-  },
-  {
-    timeout: 1000, // 1 second
-  }
-);
-```
-
-### Configuring For Connect
-
-A per-request `Stripe-Account` header for use with [Stripe Connect][connect]
-can be added to any method:
-
-```js
-// List the balance transactions for a connected account:
-stripe.balanceTransactions.list(
-  {
-    limit: 10,
-  },
-  {
-    stripeAccount: 'acct_foo',
-  }
-);
-```
-
-### Configuring a Proxy
-
-To use stripe behind a proxy you can pass an [https-proxy-agent][https-proxy-agent] on initialization:
-
-```js
-if (process.env.http_proxy) {
-  const ProxyAgent = require('https-proxy-agent');
-
-  const stripe = Stripe('sk_test_...', {
-    httpAgent: new ProxyAgent(process.env.http_proxy),
-  });
-}
-```
-
-### Network retries
-
-As of [v13](https://github.com/stripe/stripe-node/releases/tag/v13.0.0) stripe-node will automatically do one reattempt for failed requests that are safe to retry. Automatic network retries can be disabled by setting the `maxNetworkRetries` config option to `0`. You can also set a higher number to reattempt multiple times, with exponential backoff. [Idempotency keys](https://stripe.com/docs/api/idempotent_requests) are added where appropriate to prevent duplication.
-
-```js
-const stripe = Stripe('sk_test_...', {
-  maxNetworkRetries: 0, // Disable retries
-});
-```
-
-```js
-const stripe = Stripe('sk_test_...', {
-  maxNetworkRetries: 2, // Retry a request twice before giving up
-});
-```
-
-Network retries can also be set on a per-request basis:
-
-```js
-stripe.customers.create(
-  {
-    email: 'customer@example.com',
-  },
-  {
-    maxNetworkRetries: 2, // Retry this specific request twice before giving up
-  }
-);
-```
-
-### Examining Responses
-
-Some information about the response which generated a resource is available
-with the `lastResponse` property:
-
-```js
-customer.lastResponse.requestId; // see: https://stripe.com/docs/api/request_ids?lang=node
-customer.lastResponse.statusCode;
-```
-
-### `request` and `response` events
-
-The Stripe object emits `request` and `response` events. You can use them like this:
-
-```js
-const stripe = require('stripe')('sk_test_...');
-
-const onRequest = (request) => {
-  // Do something.
-};
-
-// Add the event handler function:
-stripe.on('request', onRequest);
-
-// Remove the event handler function:
-stripe.off('request', onRequest);
-```
-
-#### `request` object
-
-```js
-{
-  api_version: 'latest',
-  account: 'acct_TEST',              // Only present if provided
-  idempotency_key: 'abc123',         // Only present if provided
-  method: 'POST',
-  path: '/v1/customers',
-  request_start_time: 1565125303932  // Unix timestamp in milliseconds
-}
-```
-
-#### `response` object
-
-```js
-{
-  api_version: 'latest',
-  account: 'acct_TEST',              // Only present if provided
-  idempotency_key: 'abc123',         // Only present if provided
-  method: 'POST',
-  path: '/v1/customers',
-  status: 402,
-  request_id: 'req_Ghc9r26ts73DRf',
-  elapsed: 445,                      // Elapsed time in milliseconds
-  request_start_time: 1565125303932, // Unix timestamp in milliseconds
-  request_end_time: 1565125304377    // Unix timestamp in milliseconds
-}
-```
-
-### Webhook signing
-
-Stripe can optionally sign the webhook events it sends to your endpoint, allowing you to validate that they were not sent by a third-party. You can read more about it [here](https://stripe.com/docs/webhooks/signatures).
-
-Please note that you must pass the _raw_ request body, exactly as received from Stripe, to the `constructEvent()` function; this will not work with a parsed (i.e., JSON) request body.
-
-You can find an example of how to use this with various JavaScript frameworks in [`examples/webhook-signing`](examples/webhook-signing) folder, but here's what it looks like:
-
-```js
-const event = stripe.webhooks.constructEvent(
-  webhookRawBody,
-  webhookStripeSignatureHeader,
-  webhookSecret
-);
-```
-
-#### Testing Webhook signing
-
-You can use `stripe.webhooks.generateTestHeaderString` to mock webhook events that come from Stripe:
-
-```js
-const payload = {
-  id: 'evt_test_webhook',
-  object: 'event',
-};
-
-const payloadString = JSON.stringify(payload, null, 2);
-const secret = 'whsec_test_secret';
-
-const header = stripe.webhooks.generateTestHeaderString({
-  payload: payloadString,
-  secret,
-});
-
-const event = stripe.webhooks.constructEvent(payloadString, header, secret);
-
-// Do something with mocked signed event
-expect(event.id).to.equal(payload.id);
-```
-
-### Writing a Plugin
-
-If you're writing a plugin that uses the library, we'd appreciate it if you instantiated your stripe client with `appInfo`, eg;
-
-```js
-const stripe = require('stripe')('sk_test_...', {
-  appInfo: {
-    name: 'MyAwesomePlugin',
-    version: '1.2.34', // Optional
-    url: 'https://myawesomeplugin.info', // Optional
-  },
-});
-```
-
-Or using ES modules or TypeScript:
-
-```js
-const stripe = new Stripe(apiKey, {
-  appInfo: {
-    name: 'MyAwesomePlugin',
-    version: '1.2.34', // Optional
-    url: 'https://myawesomeplugin.info', // Optional
-  },
-});
-```
-
-This information is passed along when the library makes calls to the Stripe API.
-
-### Auto-pagination
-
-We provide a few different APIs for this to aid with a variety of node versions and styles.
-
-#### Async iterators (`for-await-of`)
-
-If you are in a Node environment that has support for [async iteration](https://github.com/tc39/proposal-async-iteration#the-async-iteration-statement-for-await-of),
-such as Node 10+ or [babel](https://babeljs.io/docs/en/babel-plugin-transform-async-generator-functions),
-the following will auto-paginate:
-
-```js
-for await (const customer of stripe.customers.list()) {
-  doSomething(customer);
-  if (shouldStop()) {
-    break;
-  }
-}
-```
-
-#### `autoPagingEach`
-
-If you are in a Node environment that has support for `await`, such as Node 7.9 and greater,
-you may pass an async function to `.autoPagingEach`:
-
-```js
-await stripe.customers.list().autoPagingEach(async (customer) => {
-  await doSomething(customer);
-  if (shouldBreak()) {
-    return false;
-  }
-});
-console.log('Done iterating.');
-```
-
-Equivalently, without `await`, you may return a Promise, which can resolve to `false` to break:
-
-```js
-stripe.customers
-  .list()
-  .autoPagingEach((customer) => {
-    return doSomething(customer).then(() => {
-      if (shouldBreak()) {
-        return false;
-      }
-    });
-  })
-  .then(() => {
-    console.log('Done iterating.');
-  })
-  .catch(handleError);
-```
-
-#### `autoPagingToArray`
-
-This is a convenience for cases where you expect the number of items
-to be relatively small; accordingly, you must pass a `limit` option
-to prevent runaway list growth from consuming too much memory. Once the
-`limit` number of items have been fetched, auto-pagination will stop.
-
-Returns a promise of an array of all items across pages for a list request.
-
-```js
-const allNewCustomers = await stripe.customers
-  .list({created: {gt: lastMonth}, limit: 100}) // 100 items per page
-  .autoPagingToArray({limit: 10000}); // Stop after 10000 items total
-```
-
-### Telemetry
-
-By default, the library sends request telemetry to Stripe regarding request
-latency and feature usage. These
-numbers help Stripe improve the overall latency of its API for all users, and
-improve popular features.
-
-You can disable this behavior if you prefer:
-
-```js
-const stripe = new Stripe('sk_test_...', {
-  telemetry: false,
-});
-```
-
-### Public Preview SDKs
-
-Stripe has features in the [public preview phase](https://docs.stripe.com/release-phases) that can be accessed via versions of this package that have the `-beta.X` suffix like `15.2.0-beta.2`.
-We would love for you to try these as we incrementally release new features and improve them based on your feedback.
-
-To install, choose the version that includes support for the preview feature you are interested in by reviewing the [releases page](https://github.com/stripe/stripe-node/releases/) and use it in the below command
-
-```
-npm install stripe@<replace-with-the-version-of-your-choice> --save
-```
-
-> **Note**
-> There can be breaking changes between two versions of the public preview SDKs without a bump in the major version. Therefore we recommend pinning the package version to a specific version in your package.json file. This way you can install the same version each time without breaking changes unless you are intentionally looking for the latest public preview SDK.
-
-The versions tab on the [stripe page on npm](https://www.npmjs.com/package/stripe) lists the current tags in use. The `beta` tag here corresponds to the the latest public preview SDK.
-
-Some preview features require a name and version to be set in the `Stripe-Version` header like `feature_beta=v3`. If your preview feature has this requirement, use the `apiVersion` property of `config` object to set it:
-
-```js
-const stripe = new Stripe('sk_test_...', {
-  apiVersion: '2022-08-01; feature_beta=v3',
-});
-```
-
-### Custom requests
-
-If you would like to send a request to an undocumented API (for example you are in a private beta), or if you prefer to bypass the method definitions in the library and specify your request details directly, you can use the `rawRequest` method on the StripeClient object.
-
-```javascript
-const client = new Stripe('sk_test_...');
-
-client.rawRequest(
-    'POST',
-    '/v1/beta_endpoint',
-    { param: 123 },
-    { apiVersion: '2022-11-15; feature_beta=v3' }
-  )
-  .then((response) => /* handle response */ )
-  .catch((error) => console.error(error));
-```
-
-Or using ES modules and `async`/`await`:
-
-```javascript
-import Stripe from 'stripe';
-const stripe = new Stripe('sk_test_...');
-
-const response = await stripe.rawRequest(
-  'POST',
-  '/v1/beta_endpoint',
-  {param: 123},
-  {apiVersion: '2022-11-15; feature_beta=v3'}
-);
-
-// handle response
-```
+Mongoose 8.0.0 was released on October 31, 2023. You can find more details on [backwards breaking changes in 8.0.0 on our docs site](https://mongoosejs.com/docs/migrating_to_8.html).
 
 ## Support
 
-New features and bug fixes are released on the latest major version of the `stripe` package. If you are on an older major version, we recommend that you upgrade to the latest in order to use the new features and bug fixes including those for security vulnerabilities. Older major versions of the package will continue to be available for use, but will not be receiving any updates.
+* [Stack Overflow](http://stackoverflow.com/questions/tagged/mongoose)
+* [Bug Reports](https://github.com/Automattic/mongoose/issues/)
+* [Mongoose Slack Channel](http://slack.mongoosejs.io/)
+* [Help Forum](http://groups.google.com/group/mongoose-orm)
+* [MongoDB Support](https://www.mongodb.com/docs/manual/support/)
 
-## More Information
+## Plugins
 
-- [REST API Version](https://github.com/stripe/stripe-node/wiki/REST-API-Version)
-- [Error Handling](https://github.com/stripe/stripe-node/wiki/Error-Handling)
-- [Passing Options](https://github.com/stripe/stripe-node/wiki/Passing-Options)
-- [Using Stripe Connect](https://github.com/stripe/stripe-node/wiki/Using-Stripe-Connect-with-node.js)
+Check out the [plugins search site](http://plugins.mongoosejs.io/) to see hundreds of related modules from the community. Next, learn how to write your own plugin from the [docs](http://mongoosejs.com/docs/plugins.html) or [this blog post](http://thecodebarbarian.com/2015/03/06/guide-to-mongoose-plugins).
 
-## Development
+## Contributors
 
-[Contribution guidelines for this project](CONTRIBUTING.md)
+Pull requests are always welcome! Please base pull requests against the `master`
+branch and follow the [contributing guide](https://github.com/Automattic/mongoose/blob/master/CONTRIBUTING.md).
 
-The tests depend on [stripe-mock][stripe-mock], so make sure to fetch and
-run it from a background terminal ([stripe-mock's README][stripe-mock-usage]
-also contains instructions for installing via Homebrew and other methods):
+If your pull requests makes documentation changes, please do **not**
+modify any `.html` files. The `.html` files are compiled code, so please make
+your changes in `docs/*.pug`, `lib/*.js`, or `test/docs/*.js`.
 
-```bash
-go get -u github.com/stripe/stripe-mock
-stripe-mock
+View all 400+ [contributors](https://github.com/Automattic/mongoose/graphs/contributors).
+
+## Installation
+
+First install [Node.js](http://nodejs.org/) and [MongoDB](https://www.mongodb.org/downloads). Then:
+
+```sh
+npm install mongoose
 ```
 
-We use [just](https://github.com/casey/just) for conveniently running development tasks. You can use them directly, or copy the commands out of the `justfile`. To our help docs, run `just`.
+Mongoose 6.8.0 also includes alpha support for [Deno](https://deno.land/).
 
-Run all tests (installing the dependencies first, if needed)
+## Importing
 
-```bash
-just test
-# or: yarn && yarn test
+```javascript
+// Using Node.js `require()`
+const mongoose = require('mongoose');
+
+// Using ES6 imports
+import mongoose from 'mongoose';
 ```
 
-If you do not have `yarn` installed, consult its [installation instructions](https://classic.yarnpkg.com/lang/en/docs/install/).
+Or, using [Deno's `createRequire()` for CommonJS support](https://deno.land/std@0.113.0/node/README.md?source=#commonjs-modules-loading) as follows.
 
-Run a single test suite:
+```javascript
+import { createRequire } from 'https://deno.land/std@0.177.0/node/module.ts';
+const require = createRequire(import.meta.url);
 
-```bash
-just test test/Error.spec.ts
-# or: yarn test test/Error.spec.ts
+const mongoose = require('mongoose');
+
+mongoose.connect('mongodb://127.0.0.1:27017/test')
+  .then(() => console.log('Connected!'));
 ```
 
-Run a single test (case sensitive) in watch mode:
+You can then run the above script using the following.
 
-```bash
-just test test/Error.spec.ts --grep 'StripeError' --watch
-# or: yarn test test/Error.spec.ts --grep 'StripeError' --watch
+```sh
+deno run --allow-net --allow-read --allow-sys --allow-env mongoose-test.js
 ```
 
-If you wish, you may run tests using your Stripe _Test_ API key by setting the
-environment variable `STRIPE_TEST_API_KEY` before running the tests:
+## Mongoose for Enterprise
 
-```bash
-export STRIPE_TEST_API_KEY='sk_test....'
-just test
-# or: yarn test
+Available as part of the Tidelift Subscription
+
+The maintainers of mongoose and thousands of other packages are working with Tidelift to deliver commercial support and maintenance for the open source dependencies you use to build your applications. Save time, reduce risk, and improve code health, while paying the maintainers of the exact dependencies you use. [Learn more.](https://tidelift.com/subscription/pkg/npm-mongoose?utm_source=npm-mongoose&utm_medium=referral&utm_campaign=enterprise&utm_term=repo)
+
+## Overview
+
+### Connecting to MongoDB
+
+First, we need to define a connection. If your app uses only one database, you should use `mongoose.connect`. If you need to create additional connections, use `mongoose.createConnection`.
+
+Both `connect` and `createConnection` take a `mongodb://` URI, or the parameters `host, database, port, options`.
+
+```js
+await mongoose.connect('mongodb://127.0.0.1/my_database');
 ```
 
-Run prettier:
+Once connected, the `open` event is fired on the `Connection` instance. If you're using `mongoose.connect`, the `Connection` is `mongoose.connection`. Otherwise, `mongoose.createConnection` return value is a `Connection`.
 
-Add an [editor integration](https://prettier.io/docs/en/editors.html) or:
+**Note:** *If the local connection fails then try using 127.0.0.1 instead of localhost. Sometimes issues may arise when the local hostname has been changed.*
 
-```bash
-just format
-# or: yarn prettier src/**/*.ts --write
+**Important!** Mongoose buffers all the commands until it's connected to the database. This means that you don't have to wait until it connects to MongoDB in order to define models, run queries, etc.
+
+### Defining a Model
+
+Models are defined through the `Schema` interface.
+
+```js
+const Schema = mongoose.Schema;
+const ObjectId = Schema.ObjectId;
+
+const BlogPost = new Schema({
+  author: ObjectId,
+  title: String,
+  body: String,
+  date: Date
+});
 ```
 
-[api-keys]: https://dashboard.stripe.com/account/apikeys
-[api-versions]: https://stripe.com/docs/api/versioning
-[api-version-upgrading]: https://stripe.com/docs/upgrades#how-can-i-upgrade-my-api
-[connect]: https://stripe.com/connect
-[expanding_objects]: https://stripe.com/docs/api/expanding_objects
-[https-proxy-agent]: https://github.com/TooTallNate/node-https-proxy-agent
-[stripe-js]: https://stripe.com/docs/js
-[stripe-mock]: https://github.com/stripe/stripe-mock
-[stripe-mock-usage]: https://github.com/stripe/stripe-mock#usage
+Aside from defining the structure of your documents and the types of data you're storing, a Schema handles the definition of:
 
-<!--
-# vim: set tw=79:
--->
+* [Validators](http://mongoosejs.com/docs/validation.html) (async and sync)
+* [Defaults](http://mongoosejs.com/docs/api/schematype.html#schematype_SchemaType-default)
+* [Getters](http://mongoosejs.com/docs/api/schematype.html#schematype_SchemaType-get)
+* [Setters](http://mongoosejs.com/docs/api/schematype.html#schematype_SchemaType-set)
+* [Indexes](http://mongoosejs.com/docs/guide.html#indexes)
+* [Middleware](http://mongoosejs.com/docs/middleware.html)
+* [Methods](http://mongoosejs.com/docs/guide.html#methods) definition
+* [Statics](http://mongoosejs.com/docs/guide.html#statics) definition
+* [Plugins](http://mongoosejs.com/docs/plugins.html)
+* [pseudo-JOINs](http://mongoosejs.com/docs/populate.html)
+
+The following example shows some of these features:
+
+```js
+const Comment = new Schema({
+  name: { type: String, default: 'hahaha' },
+  age: { type: Number, min: 18, index: true },
+  bio: { type: String, match: /[a-z]/ },
+  date: { type: Date, default: Date.now },
+  buff: Buffer
+});
+
+// a setter
+Comment.path('name').set(function(v) {
+  return capitalize(v);
+});
+
+// middleware
+Comment.pre('save', function(next) {
+  notify(this.get('email'));
+  next();
+});
+```
+
+Take a look at the example in [`examples/schema/schema.js`](https://github.com/Automattic/mongoose/blob/master/examples/schema/schema.js) for an end-to-end example of a typical setup.
+
+### Accessing a Model
+
+Once we define a model through `mongoose.model('ModelName', mySchema)`, we can access it through the same function
+
+```js
+const MyModel = mongoose.model('ModelName');
+```
+
+Or just do it all at once
+
+```js
+const MyModel = mongoose.model('ModelName', mySchema);
+```
+
+The first argument is the *singular* name of the collection your model is for. **Mongoose automatically looks for the *plural* version of your model name.** For example, if you use
+
+```js
+const MyModel = mongoose.model('Ticket', mySchema);
+```
+
+Then `MyModel` will use the **tickets** collection, not the **ticket** collection. For more details read the [model docs](https://mongoosejs.com/docs/api/mongoose.html#mongoose_Mongoose-model).
+
+Once we have our model, we can then instantiate it, and save it:
+
+```js
+const instance = new MyModel();
+instance.my.key = 'hello';
+await instance.save();
+```
+
+Or we can find documents from the same collection
+
+```js
+await MyModel.find({});
+```
+
+You can also `findOne`, `findById`, `update`, etc.
+
+```js
+const instance = await MyModel.findOne({ /* ... */ });
+console.log(instance.my.key); // 'hello'
+```
+
+For more details check out [the docs](http://mongoosejs.com/docs/queries.html).
+
+**Important!** If you opened a separate connection using `mongoose.createConnection()` but attempt to access the model through `mongoose.model('ModelName')` it will not work as expected since it is not hooked up to an active db connection. In this case access your model through the connection you created:
+
+```js
+const conn = mongoose.createConnection('your connection string');
+const MyModel = conn.model('ModelName', schema);
+const m = new MyModel();
+await m.save(); // works
+```
+
+vs
+
+```js
+const conn = mongoose.createConnection('your connection string');
+const MyModel = mongoose.model('ModelName', schema);
+const m = new MyModel();
+await m.save(); // does not work b/c the default connection object was never connected
+```
+
+### Embedded Documents
+
+In the first example snippet, we defined a key in the Schema that looks like:
+
+```txt
+comments: [Comment]
+```
+
+Where `Comment` is a `Schema` we created. This means that creating embedded documents is as simple as:
+
+```js
+// retrieve my model
+const BlogPost = mongoose.model('BlogPost');
+
+// create a blog post
+const post = new BlogPost();
+
+// create a comment
+post.comments.push({ title: 'My comment' });
+
+await post.save();
+```
+
+The same goes for removing them:
+
+```js
+const post = await BlogPost.findById(myId);
+post.comments[0].deleteOne();
+await post.save();
+```
+
+Embedded documents enjoy all the same features as your models. Defaults, validators, middleware.
+
+### Middleware
+
+See the [docs](http://mongoosejs.com/docs/middleware.html) page.
+
+#### Intercepting and mutating method arguments
+
+You can intercept method arguments via middleware.
+
+For example, this would allow you to broadcast changes about your Documents every time someone `set`s a path in your Document to a new value:
+
+```js
+schema.pre('set', function(next, path, val, typel) {
+  // `this` is the current Document
+  this.emit('set', path, val);
+
+  // Pass control to the next pre
+  next();
+});
+```
+
+Moreover, you can mutate the incoming `method` arguments so that subsequent middleware see different values for those arguments. To do so, just pass the new values to `next`:
+
+```js
+schema.pre(method, function firstPre(next, methodArg1, methodArg2) {
+  // Mutate methodArg1
+  next('altered-' + methodArg1.toString(), methodArg2);
+});
+
+// pre declaration is chainable
+schema.pre(method, function secondPre(next, methodArg1, methodArg2) {
+  console.log(methodArg1);
+  // => 'altered-originalValOfMethodArg1'
+
+  console.log(methodArg2);
+  // => 'originalValOfMethodArg2'
+
+  // Passing no arguments to `next` automatically passes along the current argument values
+  // i.e., the following `next()` is equivalent to `next(methodArg1, methodArg2)`
+  // and also equivalent to, with the example method arg
+  // values, `next('altered-originalValOfMethodArg1', 'originalValOfMethodArg2')`
+  next();
+});
+```
+
+#### Schema gotcha
+
+`type`, when used in a schema has special meaning within Mongoose. If your schema requires using `type` as a nested property you must use object notation:
+
+```js
+new Schema({
+  broken: { type: Boolean },
+  asset: {
+    name: String,
+    type: String // uh oh, it broke. asset will be interpreted as String
+  }
+});
+
+new Schema({
+  works: { type: Boolean },
+  asset: {
+    name: String,
+    type: { type: String } // works. asset is an object with a type property
+  }
+});
+```
+
+### Driver Access
+
+Mongoose is built on top of the [official MongoDB Node.js driver](https://github.com/mongodb/node-mongodb-native). Each mongoose model keeps a reference to a [native MongoDB driver collection](http://mongodb.github.io/node-mongodb-native/2.1/api/Collection.html). The collection object can be accessed using `YourModel.collection`. However, using the collection object directly bypasses all mongoose features, including hooks, validation, etc. The one
+notable exception that `YourModel.collection` still buffers
+commands. As such, `YourModel.collection.find()` will **not**
+return a cursor.
+
+## API Docs
+
+[Mongoose API documentation](http://mongoosejs.com/docs/api/mongoose.html), generated using [dox](https://github.com/tj/dox)
+and [acquit](https://github.com/vkarpov15/acquit).
+
+## Related Projects
+
+### MongoDB Runners
+
+* [run-rs](https://www.npmjs.com/package/run-rs)
+* [mongodb-memory-server](https://www.npmjs.com/package/mongodb-memory-server)
+* [mongodb-topology-manager](https://www.npmjs.com/package/mongodb-topology-manager)
+
+### Unofficial CLIs
+
+* [mongoosejs-cli](https://www.npmjs.com/package/mongoosejs-cli)
+
+### Data Seeding
+
+* [dookie](https://www.npmjs.com/package/dookie)
+* [seedgoose](https://www.npmjs.com/package/seedgoose)
+* [mongoose-data-seed](https://www.npmjs.com/package/mongoose-data-seed)
+
+### Express Session Stores
+
+* [connect-mongodb-session](https://www.npmjs.com/package/connect-mongodb-session)
+* [connect-mongo](https://www.npmjs.com/package/connect-mongo)
+
+## License
+
+Copyright (c) 2010 LearnBoost &lt;dev@learnboost.com&gt;
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of this software and associated documentation files (the
+'Software'), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to
+the following conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

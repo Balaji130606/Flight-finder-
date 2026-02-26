@@ -1,465 +1,662 @@
-**Installation**: `npm install sift`, or `yarn add sift`
+# Stripe Node.js Library
 
-## Sift is a tiny library for using MongoDB queries in Javascript
+[![Version](https://img.shields.io/npm/v/stripe.svg)](https://www.npmjs.org/package/stripe)
+[![Build Status](https://github.com/stripe/stripe-node/actions/workflows/main.yml/badge.svg?branch=master)](https://github.com/stripe/stripe-node/actions?query=branch%3Amaster)
+[![Downloads](https://img.shields.io/npm/dm/stripe.svg)](https://www.npmjs.com/package/stripe)
+[![Try on RunKit](https://badge.runkitcdn.com/stripe.svg)](https://runkit.com/npm/stripe)
 
-[![Build Status](https://secure.travis-ci.org/crcn/sift.js.png)](https://secure.travis-ci.org/crcn/sift.js)
+The Stripe Node library provides convenient access to the Stripe API from
+applications written in server-side JavaScript.
 
-<!-- [![Coverage Status](https://coveralls.io/repos/crcn/sift.js/badge.svg)](https://coveralls.io/r/crcn/sift.js)  -->
-<!-- [![Join the chat at https://gitter.im/crcn/sift.js](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/crcn/sift.js?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge) -->
+For collecting customer and payment information in the browser, use [Stripe.js][stripe-js].
 
-**For extended documentation, checkout http://docs.mongodb.org/manual/reference/operator/query/**
+## Documentation
 
-## Features:
+See the [`stripe-node` API docs](https://stripe.com/docs/api?lang=node) for Node.js.
 
-- Supported operators: [\$in](#in), [\$nin](#nin), [\$exists](#exists), [\$gte](#gte), [\$gt](#gt), [\$lte](#lte), [\$lt](#lt), [\$eq](#eq), [\$ne](#ne), [\$mod](#mod), [\$all](#all), [\$and](#and), [\$or](#or), [\$nor](#nor), [\$not](#not), [\$size](#size), [\$type](#type), [\$regex](#regex), [\$where](#where), [\$elemMatch](#elemmatch)
-- Regexp searches
-- Supports node.js, and web
-- Custom Operations
-- Tree-shaking (omitting functionality from web app bundles)
+## Requirements
 
-## Examples
+Node 12 or higher.
 
-```javascript
-import sift from "sift";
+## Installation
 
-// intersecting arrays
-const result1 = ["hello", "sifted", "array!"].filter(
-  sift({ $in: ["hello", "world"] }),
-); // ['hello']
+Install the package with:
 
-// regexp filter
-const result2 = ["craig", "john", "jake"].filter(sift(/^j/)); //['john','jake']
+```sh
+npm install stripe
+# or
+yarn add stripe
+```
 
-// function filter
-const testFilter = sift({
-  //you can also filter against functions
-  name: function (value) {
-    return value.length == 5;
-  },
+## Usage
+
+The package needs to be configured with your account's secret key, which is
+available in the [Stripe Dashboard][api-keys]. Require it with the key's
+value:
+
+<!-- prettier-ignore -->
+```js
+const stripe = require('stripe')('sk_test_...');
+
+stripe.customers.create({
+  email: 'customer@example.com',
+})
+  .then(customer => console.log(customer.id))
+  .catch(error => console.error(error));
+```
+
+Or using ES modules and `async`/`await`:
+
+```js
+import Stripe from 'stripe';
+const stripe = new Stripe('sk_test_...');
+
+const customer = await stripe.customers.create({
+  email: 'customer@example.com',
 });
 
-const result3 = [
+console.log(customer.id);
+```
+
+> [!WARNING]
+> If you're using `v17.x.x` or later and getting an error about a missing API key despite being sure it's available, it's likely you're importing the file that instantiates `Stripe` while the key isn't present (for instance, during a build step).
+> If that's the case, consider instantiating the client lazily:
+>
+> ```ts
+> import Stripe from 'stripe';
+>
+> let _stripe: Stripe | null = null;
+> const getStripe = (): Stripe => {
+>   if (!_stripe) {
+>     _stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
+>       // ...
+>     });
+>   }
+>   return _stripe;
+> };
+>
+> const getCustomers = () => getStripe().customers.list();
+> ```
+>
+> Alternatively, you can provide a placeholder for the real key (which will be enough to get the code through a build step):
+>
+> ```ts
+> import Stripe from 'stripe';
+>
+> export const stripe = new Stripe(
+>   process.env.STRIPE_SECRET_KEY || 'api_key_placeholder',
+>   {
+>     // ...
+>   }
+> );
+> ```
+
+### Usage with TypeScript
+
+As of 8.0.1, Stripe maintains types for the latest [API version][api-versions].
+
+Import Stripe as a default import (not `* as Stripe`, unlike the DefinitelyTyped version)
+and instantiate it as `new Stripe()` with the latest API version.
+
+```ts
+import Stripe from 'stripe';
+const stripe = new Stripe('sk_test_...');
+
+const createCustomer = async () => {
+  const params: Stripe.CustomerCreateParams = {
+    description: 'test customer',
+  };
+
+  const customer: Stripe.Customer = await stripe.customers.create(params);
+
+  console.log(customer.id);
+};
+createCustomer();
+```
+
+You can find a full TS server example in [stripe-samples](https://github.com/stripe-samples/accept-a-payment/tree/main/custom-payment-flow/server/node-typescript).
+
+#### Using old API versions with TypeScript
+
+Types can change between API versions (e.g., Stripe may have changed a field from a string to a hash),
+so our types only reflect the latest API version.
+
+We therefore encourage [upgrading your API version][api-version-upgrading]
+if you would like to take advantage of Stripe's TypeScript definitions.
+
+If you are on an older API version (e.g., `2019-10-17`) and not able to upgrade,
+you may pass another version and use a comment like `// @ts-ignore stripe-version-2019-10-17` to silence type errors here
+and anywhere the types differ between your API version and the latest.
+When you upgrade, you should remove these comments.
+
+We also recommend using `// @ts-ignore` if you have access to a beta feature and need to send parameters beyond the type definitions.
+
+#### Using `expand` with TypeScript
+
+[Expandable][expanding_objects] fields are typed as `string | Foo`,
+so you must cast them appropriately, e.g.,
+
+```ts
+const paymentIntent: Stripe.PaymentIntent = await stripe.paymentIntents.retrieve(
+  'pi_123456789',
   {
-    name: "craig",
+    expand: ['customer'],
+  }
+);
+const customerEmail: string = (paymentIntent.customer as Stripe.Customer).email;
+```
+
+#### TypeScript and the stripe-node versioning policy
+
+The TypeScript types in stripe-node always reflect the latest shape of the Stripe API. When the Stripe API changes in a [backwards-incompatible way](https://stripe.com/docs/upgrades#what-changes-does-stripe-consider-to-be-backwards-compatible), there is a new Stripe API version, and we release a new major version of stripe-node. Sometimes, though, the Stripe API changes in a way that weakens the guarantees provided by the TypeScript types, but that cannot result in any backwards incompatibility at runtime. For example, we might add a new enum value on a response, along with a new parameter to a request. Adding a new value to a response enum weakens the TypeScript type. However, if the new enum value is only returned when the new parameter is provided, this cannot break any existing usages and so would not be considered a breaking API change. In stripe-node, we do NOT consider such changes to be breaking under our current versioning policy. This means that you might see new type errors from TypeScript as you upgrade minor versions of stripe-node, that you can resolve by adding additional type guards.
+
+Please feel welcome to share your thoughts about the versioning policy in a Github issue. For now, we judge it to be better than the two alternatives: outdated, inaccurate types, or vastly more frequent major releases, which would distract from any future breaking changes with potentially more disruptive runtime implications.
+
+### Using Promises
+
+Every method returns a chainable promise which can be used instead of a regular
+callback:
+
+```js
+// Create a new customer and then create an invoice item then invoice it:
+stripe.customers
+  .create({
+    email: 'customer@example.com',
+  })
+  .then((customer) => {
+    // have access to the customer object
+    return stripe.invoiceItems
+      .create({
+        customer: customer.id, // set the customer id
+        amount: 2500, // 25
+        currency: 'usd',
+        description: 'One-time setup fee',
+      })
+      .then((invoiceItem) => {
+        return stripe.invoices.create({
+          collection_method: 'send_invoice',
+          customer: invoiceItem.customer,
+        });
+      })
+      .then((invoice) => {
+        // New invoice created on a new customer
+      })
+      .catch((err) => {
+        // Deal with an error
+      });
+  });
+```
+
+### Usage with Deno
+
+As of 11.16.0, stripe-node provides a `deno` export target. In your Deno project, import stripe-node using an npm specifier:
+
+Import using npm specifiers:
+
+```js
+import Stripe from 'npm:stripe';
+```
+
+Please see https://github.com/stripe-samples/stripe-node-deno-samples for more detailed examples and instructions on how to use stripe-node in Deno.
+
+## Configuration
+
+### Initialize with config object
+
+The package can be initialized with several options:
+
+```js
+import ProxyAgent from 'https-proxy-agent';
+
+const stripe = Stripe('sk_test_...', {
+  maxNetworkRetries: 1,
+  httpAgent: new ProxyAgent(process.env.http_proxy),
+  timeout: 1000,
+  host: 'api.example.com',
+  port: 123,
+  telemetry: true,
+});
+```
+
+| Option              | Default            | Description                                                                                                                                                                                                                                       |
+| ------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apiVersion`        | `null`             | Stripe API version to be used. If not set, stripe-node will use the latest version at the time of release.                                                                                                                                        |
+| `maxNetworkRetries` | 1                  | The amount of times a request should be [retried](#network-retries).                                                                                                                                                                              |
+| `httpAgent`         | `null`             | [Proxy](#configuring-a-proxy) agent to be used by the library.                                                                                                                                                                                    |
+| `timeout`           | 80000              | [Maximum time each request can take in ms.](#configuring-timeout)                                                                                                                                                                                 |
+| `host`              | `'api.stripe.com'` | Host that requests are made to.                                                                                                                                                                                                                   |
+| `port`              | 443                | Port that requests are made to.                                                                                                                                                                                                                   |
+| `protocol`          | `'https'`          | `'https'` or `'http'`. `http` is never appropriate for sending requests to Stripe servers, and we strongly discourage `http`, even in local testing scenarios, as this can result in your credentials being transmitted over an insecure channel. |
+| `telemetry`         | `true`             | Allow Stripe to send [telemetry](#telemetry).                                                                                                                                                                                                     |
+
+> **Note**
+> Both `maxNetworkRetries` and `timeout` can be overridden on a per-request basis.
+
+### Configuring Timeout
+
+Timeout can be set globally via the config object:
+
+```js
+const stripe = Stripe('sk_test_...', {
+  timeout: 20 * 1000, // 20 seconds
+});
+```
+
+And overridden on a per-request basis:
+
+```js
+stripe.customers.create(
+  {
+    email: 'customer@example.com',
   },
   {
-    name: "john",
+    timeout: 1000, // 1 second
+  }
+);
+```
+
+### Configuring For Connect
+
+A per-request `Stripe-Account` header for use with [Stripe Connect][connect]
+can be added to any method:
+
+```js
+// List the balance transactions for a connected account:
+stripe.balanceTransactions.list(
+  {
+    limit: 10,
   },
   {
-    name: "jake",
-  },
-].filter(testFilter); // filtered: [{ name: 'craig' }]
-
-// you can test *single values* against your custom sifter
-testFilter({ name: "sarah" }); //true
-testFilter({ name: "tim" }); //false
+    stripeAccount: 'acct_foo',
+  }
+);
 ```
 
-## API
+### Configuring a Proxy
 
-### sift(query: MongoQuery, options?: Options): Function
+To use stripe behind a proxy you can pass an [https-proxy-agent][https-proxy-agent] on initialization:
 
-Creates a filter with all the built-in MongoDB query operations.
+```js
+if (process.env.http_proxy) {
+  const ProxyAgent = require('https-proxy-agent');
 
-- `query` - the filter to use against the target array
-- `options`
-  - `operations` - [custom operations](#custom-operations)
-  - `compare` - compares difference between two values
-
-Example:
-
-```javascript
-import sift from "sift";
-
-const test = sift({ $gt: 5 });
-
-console.log(test(6)); // true
-console.log(test(4)); // false
-
-[3, 4, 5, 6, 7].filter(test); // [6, 7]
+  const stripe = Stripe('sk_test_...', {
+    httpAgent: new ProxyAgent(process.env.http_proxy),
+  });
+}
 ```
 
-### createQueryTester(query: Query, options?: Options): Function
+### Network retries
 
-Creates a filter function **without** built-in MongoDB query operations. This is useful
-if you're looking to omit certain operations from application bundles. See [Omitting built-in operations](#omitting-built-in-operations) for more info.
+As of [v13](https://github.com/stripe/stripe-node/releases/tag/v13.0.0) stripe-node will automatically do one reattempt for failed requests that are safe to retry. Automatic network retries can be disabled by setting the `maxNetworkRetries` config option to `0`. You can also set a higher number to reattempt multiple times, with exponential backoff. [Idempotency keys](https://stripe.com/docs/api/idempotent_requests) are added where appropriate to prevent duplication.
 
-```javascript
-import { createQueryTester, $eq, $in } from "sift";
-const filter = createQueryTester({ $eq: 5 }, { operations: { $eq, $in } });
+```js
+const stripe = Stripe('sk_test_...', {
+  maxNetworkRetries: 0, // Disable retries
+});
 ```
 
-### createEqualsOperation(params: any, ownerQuery: Query, options: Options): Operation
+```js
+const stripe = Stripe('sk_test_...', {
+  maxNetworkRetries: 2, // Retry a request twice before giving up
+});
+```
 
-Used for [custom operations](#custom-operations).
+Network retries can also be set on a per-request basis:
 
-```javascript
-import { createQueryTester, createEqualsOperation, $eq, $in } from "sift";
-const filter = createQueryTester(
-  { $mod: 5 },
+```js
+stripe.customers.create(
   {
-    operations: {
-      $something(mod, ownerQuery, options) {
-        return createEqualsOperation(
-          (value) => value % mod === 0,
-          ownerQuery,
-          options,
-        );
-      },
-    },
-  },
-);
-filter(10); // true
-filter(11); // false
-```
-
-## Supported Operators
-
-See MongoDB's [advanced queries](http://www.mongodb.org/display/DOCS/Advanced+Queries) for more info.
-
-### \$in
-
-array value must be _\$in_ the given query:
-
-Intersecting two arrays:
-
-```javascript
-// filtered: ['Brazil']
-["Brazil", "Haiti", "Peru", "Chile"].filter(
-  sift({ $in: ["Costa Rica", "Brazil"] }),
-);
-```
-
-Here's another example. This acts more like the \$or operator:
-
-```javascript
-[{ name: "Craig", location: "Brazil" }].filter(
-  sift({ location: { $in: ["Costa Rica", "Brazil"] } }),
-);
-```
-
-### \$nin
-
-Opposite of \$in:
-
-```javascript
-// filtered: ['Haiti','Peru','Chile']
-["Brazil", "Haiti", "Peru", "Chile"].filter(
-  sift({ $nin: ["Costa Rica", "Brazil"] }),
-);
-```
-
-### \$exists
-
-Checks if whether a value exists:
-
-```javascript
-// filtered: ['Craig','Tim']
-sift({ $exists: true })(["Craig", null, "Tim"]);
-```
-
-You can also filter out values that don't exist
-
-```javascript
-// filtered: [{ name: "Tim" }]
-[{ name: "Craig", city: "Minneapolis" }, { name: "Tim" }].filter(
-  sift({ city: { $exists: false } }),
-);
-```
-
-### \$gte
-
-Checks if a number is >= value:
-
-```javascript
-// filtered: [2, 3]
-[0, 1, 2, 3].filter(sift({ $gte: 2 }));
-```
-
-### \$gt
-
-Checks if a number is > value:
-
-```javascript
-// filtered: [3]
-[0, 1, 2, 3].filter(sift({ $gt: 2 }));
-```
-
-### \$lte
-
-Checks if a number is <= value.
-
-```javascript
-// filtered: [0, 1, 2]
-[0, 1, 2, 3].filter(sift({ $lte: 2 }));
-```
-
-### \$lt
-
-Checks if number is < value.
-
-```javascript
-// filtered: [0, 1]
-[0, 1, 2, 3].filter(sift({ $lt: 2 }));
-```
-
-### \$eq
-
-Checks if `query === value`. Note that **\$eq can be omitted**. For **\$eq**, and **\$ne**
-
-```javascript
-// filtered: [{ state: 'MN' }]
-[{ state: "MN" }, { state: "CA" }, { state: "WI" }].filter(
-  sift({ state: { $eq: "MN" } }),
-);
-```
-
-Or:
-
-```javascript
-// filtered: [{ state: 'MN' }]
-[{ state: "MN" }, { state: "CA" }, { state: "WI" }].filter(
-  sift({ state: "MN" }),
-);
-```
-
-### \$ne
-
-Checks if `query !== value`.
-
-```javascript
-// filtered: [{ state: 'CA' }, { state: 'WI'}]
-[{ state: "MN" }, { state: "CA" }, { state: "WI" }].filter(
-  sift({ state: { $ne: "MN" } }),
-);
-```
-
-### \$mod
-
-Modulus:
-
-```javascript
-// filtered: [300, 600]
-[100, 200, 300, 400, 500, 600].filter(sift({ $mod: [3, 0] }));
-```
-
-### \$all
-
-values must match **everything** in array:
-
-```javascript
-// filtered: [ { tags: ['books','programming','travel' ]} ]
-[
-  { tags: ["books", "programming", "travel"] },
-  { tags: ["travel", "cooking"] },
-].filter(sift({ tags: { $all: ["books", "programming"] } }));
-```
-
-### \$and
-
-ability to use an array of expressions. All expressions must test true.
-
-```javascript
-// filtered: [ { name: 'Craig', state: 'MN' }]
-
-[
-  { name: "Craig", state: "MN" },
-  { name: "Tim", state: "MN" },
-  { name: "Joe", state: "CA" },
-].filter(sift({ $and: [{ name: "Craig" }, { state: "MN" }] }));
-```
-
-### \$or
-
-OR array of expressions.
-
-```javascript
-// filtered: [ { name: 'Craig', state: 'MN' }, { name: 'Tim', state: 'MN' }]
-[
-  { name: "Craig", state: "MN" },
-  { name: "Tim", state: "MN" },
-  { name: "Joe", state: "CA" },
-].filter(sift({ $or: [{ name: "Craig" }, { state: "MN" }] }));
-```
-
-### \$nor
-
-opposite of or:
-
-```javascript
-// filtered: [{ name: 'Joe', state: 'CA' }]
-[
-  { name: "Craig", state: "MN" },
-  { name: "Tim", state: "MN" },
-  { name: "Joe", state: "CA" },
-].filter(sift({ $nor: [{ name: "Craig" }, { state: "MN" }] }));
-```
-
-### \$size
-
-Matches an array - must match given size:
-
-```javascript
-// filtered: ['food','cooking']
-[{ tags: ["food", "cooking"] }, { tags: ["traveling"] }].filter(
-  sift({ tags: { $size: 2 } }),
-);
-```
-
-### \$type
-
-Matches a values based on the type
-
-```javascript
-[new Date(), 4342, "hello world"].filter(sift({ $type: Date })); // returns single date
-[new Date(), 4342, "hello world"].filter(sift({ $type: String })); // returns ['hello world']
-```
-
-### \$regex
-
-Matches values based on the given regular expression
-
-```javascript
-["frank", "fred", "sam", "frost"].filter(
-  sift({ $regex: /^f/i, $nin: ["frank"] }),
-); // ["fred", "frost"]
-["frank", "fred", "sam", "frost"].filter(
-  sift({ $regex: "^f", $options: "i", $nin: ["frank"] }),
-); // ["fred", "frost"]
-```
-
-### \$where
-
-Matches based on some javascript comparison
-
-```javascript
-[{ name: "frank" }, { name: "joe" }].filter(
-  sift({ $where: "this.name === 'frank'" }),
-); // ["frank"]
-[{ name: "frank" }, { name: "joe" }].filter(
-  sift({
-    $where: function () {
-      return this.name === "frank";
-    },
-  }),
-); // ["frank"]
-```
-
-### \$elemMatch
-
-Matches elements of array
-
-```javascript
-var bills = [
-  {
-    month: "july",
-    casts: [
-      {
-        id: 1,
-        value: 200,
-      },
-      {
-        id: 2,
-        value: 1000,
-      },
-    ],
+    email: 'customer@example.com',
   },
   {
-    month: "august",
-    casts: [
-      {
-        id: 3,
-        value: 1000,
-      },
-      {
-        id: 4,
-        value: 4000,
-      },
-    ],
-  },
-];
-
-var result = bills.filter(
-  sift({
-    casts: {
-      $elemMatch: {
-        value: { $gt: 1000 },
-      },
-    },
-  }),
-); // {month:'august', casts:[{id:3, value: 1000},{id: 4, value: 4000}]}
-```
-
-### \$not
-
-Not expression:
-
-```javascript
-["craig", "tim", "jake"].filter(sift({ $not: { $in: ["craig", "tim"] } })); // ['jake']
-["craig", "tim", "jake"].filter(sift({ $not: { $size: 5 } })); // ['tim','jake']
-```
-
-### Date comparison
-
-Mongodb allows you to do date comparisons like so:
-
-```javascript
-db.collection.find({ createdAt: { $gte: "2018-03-22T06:00:00Z" } });
-```
-
-In Sift, you'll need to specify a Date object:
-
-```javascript
-collection.find(
-  sift({ createdAt: { $gte: new Date("2018-03-22T06:00:00Z") } }),
+    maxNetworkRetries: 2, // Retry this specific request twice before giving up
+  }
 );
 ```
 
-## Custom behavior
+### Examining Responses
 
-Sift works like MongoDB out of the box, but you're also able to modify the behavior to suite your needs.
+Some information about the response which generated a resource is available
+with the `lastResponse` property:
 
-#### Custom operations
-
-You can register your own custom operations. Here's an example:
-
-```javascript
-import sift, { createEqualsOperation } from "sift";
-
-var filter = sift(
-  {
-    $customMod: 2,
-  },
-  {
-    operations: {
-      $customMod(params, ownerQuery, options) {
-        return createEqualsOperation(
-          (value) => value % params !== 0,
-          ownerQuery,
-          options,
-        );
-      },
-    },
-  },
-);
-
-[1, 2, 3, 4, 5].filter(filter); // [1, 3, 5]
+```js
+customer.lastResponse.requestId; // see: https://stripe.com/docs/api/request_ids?lang=node
+customer.lastResponse.statusCode;
 ```
 
-#### Omitting built-in operations
+### `request` and `response` events
 
-You can create a filter function that omits the built-in operations like so:
+The Stripe object emits `request` and `response` events. You can use them like this:
 
-```javascript
-import { createQueryTester, $in, $all, $nin, $lt } from "sift";
-const test = createQueryTester(
-  {
-    $eq: 10,
-  },
-  { operations: { $in, $all, $nin, $lt } },
-);
+```js
+const stripe = require('stripe')('sk_test_...');
 
-[1, 2, 3, 4, 10].filter(test);
+const onRequest = (request) => {
+  // Do something.
+};
+
+// Add the event handler function:
+stripe.on('request', onRequest);
+
+// Remove the event handler function:
+stripe.off('request', onRequest);
 ```
 
-For bundlers like `Webpack` and `Rollup`, operations that aren't used are omitted from application bundles via tree-shaking.
+#### `request` object
+
+```js
+{
+  api_version: 'latest',
+  account: 'acct_TEST',              // Only present if provided
+  idempotency_key: 'abc123',         // Only present if provided
+  method: 'POST',
+  path: '/v1/customers',
+  request_start_time: 1565125303932  // Unix timestamp in milliseconds
+}
+```
+
+#### `response` object
+
+```js
+{
+  api_version: 'latest',
+  account: 'acct_TEST',              // Only present if provided
+  idempotency_key: 'abc123',         // Only present if provided
+  method: 'POST',
+  path: '/v1/customers',
+  status: 402,
+  request_id: 'req_Ghc9r26ts73DRf',
+  elapsed: 445,                      // Elapsed time in milliseconds
+  request_start_time: 1565125303932, // Unix timestamp in milliseconds
+  request_end_time: 1565125304377    // Unix timestamp in milliseconds
+}
+```
+
+### Webhook signing
+
+Stripe can optionally sign the webhook events it sends to your endpoint, allowing you to validate that they were not sent by a third-party. You can read more about it [here](https://stripe.com/docs/webhooks/signatures).
+
+Please note that you must pass the _raw_ request body, exactly as received from Stripe, to the `constructEvent()` function; this will not work with a parsed (i.e., JSON) request body.
+
+You can find an example of how to use this with various JavaScript frameworks in [`examples/webhook-signing`](examples/webhook-signing) folder, but here's what it looks like:
+
+```js
+const event = stripe.webhooks.constructEvent(
+  webhookRawBody,
+  webhookStripeSignatureHeader,
+  webhookSecret
+);
+```
+
+#### Testing Webhook signing
+
+You can use `stripe.webhooks.generateTestHeaderString` to mock webhook events that come from Stripe:
+
+```js
+const payload = {
+  id: 'evt_test_webhook',
+  object: 'event',
+};
+
+const payloadString = JSON.stringify(payload, null, 2);
+const secret = 'whsec_test_secret';
+
+const header = stripe.webhooks.generateTestHeaderString({
+  payload: payloadString,
+  secret,
+});
+
+const event = stripe.webhooks.constructEvent(payloadString, header, secret);
+
+// Do something with mocked signed event
+expect(event.id).to.equal(payload.id);
+```
+
+### Writing a Plugin
+
+If you're writing a plugin that uses the library, we'd appreciate it if you instantiated your stripe client with `appInfo`, eg;
+
+```js
+const stripe = require('stripe')('sk_test_...', {
+  appInfo: {
+    name: 'MyAwesomePlugin',
+    version: '1.2.34', // Optional
+    url: 'https://myawesomeplugin.info', // Optional
+  },
+});
+```
+
+Or using ES modules or TypeScript:
+
+```js
+const stripe = new Stripe(apiKey, {
+  appInfo: {
+    name: 'MyAwesomePlugin',
+    version: '1.2.34', // Optional
+    url: 'https://myawesomeplugin.info', // Optional
+  },
+});
+```
+
+This information is passed along when the library makes calls to the Stripe API.
+
+### Auto-pagination
+
+We provide a few different APIs for this to aid with a variety of node versions and styles.
+
+#### Async iterators (`for-await-of`)
+
+If you are in a Node environment that has support for [async iteration](https://github.com/tc39/proposal-async-iteration#the-async-iteration-statement-for-await-of),
+such as Node 10+ or [babel](https://babeljs.io/docs/en/babel-plugin-transform-async-generator-functions),
+the following will auto-paginate:
+
+```js
+for await (const customer of stripe.customers.list()) {
+  doSomething(customer);
+  if (shouldStop()) {
+    break;
+  }
+}
+```
+
+#### `autoPagingEach`
+
+If you are in a Node environment that has support for `await`, such as Node 7.9 and greater,
+you may pass an async function to `.autoPagingEach`:
+
+```js
+await stripe.customers.list().autoPagingEach(async (customer) => {
+  await doSomething(customer);
+  if (shouldBreak()) {
+    return false;
+  }
+});
+console.log('Done iterating.');
+```
+
+Equivalently, without `await`, you may return a Promise, which can resolve to `false` to break:
+
+```js
+stripe.customers
+  .list()
+  .autoPagingEach((customer) => {
+    return doSomething(customer).then(() => {
+      if (shouldBreak()) {
+        return false;
+      }
+    });
+  })
+  .then(() => {
+    console.log('Done iterating.');
+  })
+  .catch(handleError);
+```
+
+#### `autoPagingToArray`
+
+This is a convenience for cases where you expect the number of items
+to be relatively small; accordingly, you must pass a `limit` option
+to prevent runaway list growth from consuming too much memory. Once the
+`limit` number of items have been fetched, auto-pagination will stop.
+
+Returns a promise of an array of all items across pages for a list request.
+
+```js
+const allNewCustomers = await stripe.customers
+  .list({created: {gt: lastMonth}, limit: 100}) // 100 items per page
+  .autoPagingToArray({limit: 10000}); // Stop after 10000 items total
+```
+
+### Telemetry
+
+By default, the library sends request telemetry to Stripe regarding request
+latency and feature usage. These
+numbers help Stripe improve the overall latency of its API for all users, and
+improve popular features.
+
+You can disable this behavior if you prefer:
+
+```js
+const stripe = new Stripe('sk_test_...', {
+  telemetry: false,
+});
+```
+
+### Public Preview SDKs
+
+Stripe has features in the [public preview phase](https://docs.stripe.com/release-phases) that can be accessed via versions of this package that have the `-beta.X` suffix like `15.2.0-beta.2`.
+We would love for you to try these as we incrementally release new features and improve them based on your feedback.
+
+To install, choose the version that includes support for the preview feature you are interested in by reviewing the [releases page](https://github.com/stripe/stripe-node/releases/) and use it in the below command
+
+```
+npm install stripe@<replace-with-the-version-of-your-choice> --save
+```
+
+> **Note**
+> There can be breaking changes between two versions of the public preview SDKs without a bump in the major version. Therefore we recommend pinning the package version to a specific version in your package.json file. This way you can install the same version each time without breaking changes unless you are intentionally looking for the latest public preview SDK.
+
+The versions tab on the [stripe page on npm](https://www.npmjs.com/package/stripe) lists the current tags in use. The `beta` tag here corresponds to the the latest public preview SDK.
+
+Some preview features require a name and version to be set in the `Stripe-Version` header like `feature_beta=v3`. If your preview feature has this requirement, use the `apiVersion` property of `config` object to set it:
+
+```js
+const stripe = new Stripe('sk_test_...', {
+  apiVersion: '2022-08-01; feature_beta=v3',
+});
+```
+
+### Custom requests
+
+If you would like to send a request to an undocumented API (for example you are in a private beta), or if you prefer to bypass the method definitions in the library and specify your request details directly, you can use the `rawRequest` method on the StripeClient object.
+
+```javascript
+const client = new Stripe('sk_test_...');
+
+client.rawRequest(
+    'POST',
+    '/v1/beta_endpoint',
+    { param: 123 },
+    { apiVersion: '2022-11-15; feature_beta=v3' }
+  )
+  .then((response) => /* handle response */ )
+  .catch((error) => console.error(error));
+```
+
+Or using ES modules and `async`/`await`:
+
+```javascript
+import Stripe from 'stripe';
+const stripe = new Stripe('sk_test_...');
+
+const response = await stripe.rawRequest(
+  'POST',
+  '/v1/beta_endpoint',
+  {param: 123},
+  {apiVersion: '2022-11-15; feature_beta=v3'}
+);
+
+// handle response
+```
+
+## Support
+
+New features and bug fixes are released on the latest major version of the `stripe` package. If you are on an older major version, we recommend that you upgrade to the latest in order to use the new features and bug fixes including those for security vulnerabilities. Older major versions of the package will continue to be available for use, but will not be receiving any updates.
+
+## More Information
+
+- [REST API Version](https://github.com/stripe/stripe-node/wiki/REST-API-Version)
+- [Error Handling](https://github.com/stripe/stripe-node/wiki/Error-Handling)
+- [Passing Options](https://github.com/stripe/stripe-node/wiki/Passing-Options)
+- [Using Stripe Connect](https://github.com/stripe/stripe-node/wiki/Using-Stripe-Connect-with-node.js)
+
+## Development
+
+[Contribution guidelines for this project](CONTRIBUTING.md)
+
+The tests depend on [stripe-mock][stripe-mock], so make sure to fetch and
+run it from a background terminal ([stripe-mock's README][stripe-mock-usage]
+also contains instructions for installing via Homebrew and other methods):
+
+```bash
+go get -u github.com/stripe/stripe-mock
+stripe-mock
+```
+
+We use [just](https://github.com/casey/just) for conveniently running development tasks. You can use them directly, or copy the commands out of the `justfile`. To our help docs, run `just`.
+
+Run all tests (installing the dependencies first, if needed)
+
+```bash
+just test
+# or: yarn && yarn test
+```
+
+If you do not have `yarn` installed, consult its [installation instructions](https://classic.yarnpkg.com/lang/en/docs/install/).
+
+Run a single test suite:
+
+```bash
+just test test/Error.spec.ts
+# or: yarn test test/Error.spec.ts
+```
+
+Run a single test (case sensitive) in watch mode:
+
+```bash
+just test test/Error.spec.ts --grep 'StripeError' --watch
+# or: yarn test test/Error.spec.ts --grep 'StripeError' --watch
+```
+
+If you wish, you may run tests using your Stripe _Test_ API key by setting the
+environment variable `STRIPE_TEST_API_KEY` before running the tests:
+
+```bash
+export STRIPE_TEST_API_KEY='sk_test....'
+just test
+# or: yarn test
+```
+
+Run prettier:
+
+Add an [editor integration](https://prettier.io/docs/en/editors.html) or:
+
+```bash
+just format
+# or: yarn prettier src/**/*.ts --write
+```
+
+[api-keys]: https://dashboard.stripe.com/account/apikeys
+[api-versions]: https://stripe.com/docs/api/versioning
+[api-version-upgrading]: https://stripe.com/docs/upgrades#how-can-i-upgrade-my-api
+[connect]: https://stripe.com/connect
+[expanding_objects]: https://stripe.com/docs/api/expanding_objects
+[https-proxy-agent]: https://github.com/TooTallNate/node-https-proxy-agent
+[stripe-js]: https://stripe.com/docs/js
+[stripe-mock]: https://github.com/stripe/stripe-mock
+[stripe-mock-usage]: https://github.com/stripe/stripe-mock#usage
+
+<!--
+# vim: set tw=79:
+-->
